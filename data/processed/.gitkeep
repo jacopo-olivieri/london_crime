@@ -1,0 +1,2 @@
+# This file keeps the data/processed directory in git
+# Processed parquet files will be generated when the pipeline runs

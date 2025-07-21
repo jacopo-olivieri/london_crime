@@ -1,0 +1,792 @@
+---
+title: "London Crime Data Dashboard"
+format: 
+  dashboard:
+    theme: [cosmo, custom.scss]
+    nav-buttons:
+      - icon: github
+        href: https://github.com/your-username/london_crime
+server: shiny
+---
+
+
+```{r}
+#| context: setup
+#| message: false
+#| warning: false
+#| include: false
+
+# Load required libraries
+library(shiny)
+library(shinydashboard)
+library(DT)
+library(plotly)
+library(leaflet)
+library(sf)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(here)
+library(glue)
+library(scales)
+
+# Source data processing functions
+source(here("R", "caching.R"))
+source(here("R", "spatial_setup.R"))
+
+# Initialize data
+available_months <- list_available_months()
+if (length(available_months) == 0) {
+  stop("No cached crime data found. Please run update_monthly_data() first.")
+}
+
+# Load London boundaries for mapping
+london_boundaries <- load_london_boundaries()
+borough_boundaries <- get_borough_boundaries()
+
+# Get list of crime categories and boroughs
+sample_data <- load_monthly_data(available_months[length(available_months)])
+crime_categories <- sort(unique(sample_data$category))
+borough_names <- sort(unique(sample_data$borough_name))
+
+# Default date range (last 12 months or all available)
+default_months <- tail(available_months, 12)
+```
+
+# Crime Map
+
+## {.sidebar}
+
+```{r}
+#| panel: sidebar
+
+h4("Map Filters")
+
+selectInput(
+  "selected_months",
+  "Select Months:",
+  choices = setNames(available_months, 
+                    paste(month.abb[as.numeric(str_sub(available_months, 6, 7))], 
+                          str_sub(available_months, 1, 4))),
+  selected = tail(available_months, 6),
+  multiple = TRUE
+)
+
+selectInput(
+  "selected_boroughs",
+  "Boroughs:",
+  choices = borough_names,
+  selected = borough_names,
+  multiple = TRUE
+)
+
+selectInput(
+  "selected_categories",
+  "Crime Types:",
+  choices = crime_categories,
+  selected = crime_categories[1:5], # Default to first 5 categories
+  multiple = TRUE
+)
+
+radioButtons(
+  "crime_metric",
+  "Display Metric:",
+  choices = list(
+    "Crime Count" = "count",
+    "Crime Rate (per 1000)" = "rate"
+  ),
+  selected = "count"
+)
+
+radioButtons(
+  "map_level",
+  "Aggregation Level:",
+  choices = list(
+    "Borough Level" = "borough",
+    "LSOA Level" = "lsoa"
+  ),
+  selected = "borough"
+)
+
+hr()
+
+h5("Map Summary")
+textOutput("map_summary")
+```
+
+## Column
+
+### Crime Distribution Map
+
+```{r}
+#| title: Interactive London Crime Map
+
+leafletOutput("crime_map", height = "600px")
+```
+
+# Crime Statistics
+
+## {.sidebar}
+
+```{r}
+#| panel: sidebar
+
+h4("Statistics Filters")
+
+selectInput(
+  "stats_months",
+  "Select Months:",
+  choices = setNames(available_months, 
+                    paste(month.abb[as.numeric(str_sub(available_months, 6, 7))], 
+                          str_sub(available_months, 1, 4))),
+  selected = tail(available_months, 6),
+  multiple = TRUE
+)
+
+selectInput(
+  "stats_boroughs",
+  "Boroughs:",
+  choices = borough_names,
+  selected = borough_names,
+  multiple = TRUE
+)
+
+selectInput(
+  "stats_categories",
+  "Crime Types:",
+  choices = crime_categories,
+  selected = crime_categories[1:5],
+  multiple = TRUE
+)
+```
+
+## Column {width="60%"}
+
+### Crime Statistics Summary
+
+```{r}
+#| title: Summary Statistics
+
+tableOutput("crime_stats")
+```
+
+## Column {width="40%"}
+
+### Top Crime Types
+
+```{r}
+#| title: Most Common Crimes
+
+plotlyOutput("top_crimes_chart", height = "400px")
+```
+
+# Borough Analysis
+
+## {.sidebar}
+
+```{r}
+#| panel: sidebar
+
+h4("Borough Analysis")
+
+selectInput(
+  "analysis_borough",
+  "Select Borough:",
+  choices = borough_names,
+  selected = borough_names[1]
+)
+
+dateRangeInput(
+  "analysis_date_range",
+  "Analysis Period:",
+  start = ym(default_months[1]),
+  end = ym(default_months[length(default_months)]),
+  format = "yyyy-mm"
+)
+
+checkboxGroupInput(
+  "analysis_categories",
+  "Crime Types:",
+  choices = crime_categories,
+  selected = crime_categories[1:5]
+)
+
+actionButton("update_analysis", "Update Analysis", class = "btn-primary")
+```
+
+## Column
+
+### Borough Crime Trends
+
+```{r}
+#| title: Monthly Crime Trends
+
+plotlyOutput("borough_trends", height = "400px")
+```
+
+### Borough Comparison
+
+```{r}
+#| title: Crime Counts by Borough
+
+DT::dataTableOutput("borough_comparison")
+```
+
+# Crime Trends
+
+## {.sidebar}
+
+```{r}
+#| panel: sidebar
+
+h4("Trend Analysis")
+
+selectInput(
+  "trend_aggregation",
+  "Time Period:",
+  choices = list(
+    "Monthly" = "month",
+    "Quarterly" = "quarter",
+    "Yearly" = "year"
+  ),
+  selected = "month"
+)
+
+selectInput(
+  "trend_boroughs",
+  "Compare Boroughs:",
+  choices = borough_names,
+  selected = borough_names[1:3],
+  multiple = TRUE
+)
+
+selectInput(
+  "trend_category",
+  "Focus Crime Type:",
+  choices = c("All Crimes" = "all", crime_categories),
+  selected = "all"
+)
+```
+
+## Column
+
+### Crime Trends Over Time
+
+```{r}
+#| title: Temporal Crime Patterns
+
+plotlyOutput("trends_chart", height = "350px")
+```
+
+### Seasonal Patterns
+
+```{r}
+#| title: Monthly Seasonality
+
+plotlyOutput("seasonal_chart", height = "300px")
+```
+
+# Data Explorer
+
+## {.sidebar}
+
+```{r}
+#| panel: sidebar
+
+h4("Data Explorer")
+
+selectInput(
+  "explorer_months",
+  "Select Months:",
+  choices = available_months,
+  selected = tail(available_months, 3),
+  multiple = TRUE
+)
+
+downloadButton(
+  "download_data",
+  "Download Filtered Data",
+  class = "btn-success",
+  style = "width: 100%; margin-top: 10px;"
+)
+
+hr()
+
+h5("Data Info")
+verbatimTextOutput("data_info")
+```
+
+## Column
+
+### Crime Data Table
+
+```{r}
+#| title: Searchable Crime Records
+
+DT::dataTableOutput("crime_table")
+```
+
+```{r}
+#| context: server
+
+# Reactive data loading for map
+crime_data <- reactive({
+  req(input$selected_months)
+
+  if (length(input$selected_months) == 0) {
+    return(data.frame())
+  }
+
+  load_multiple_months(input$selected_months)
+})
+
+# Filtered data for maps
+filtered_data <- reactive({
+  req(crime_data(), input$selected_boroughs, input$selected_categories)
+
+  crime_data() %>%
+    filter(
+      borough_name %in% input$selected_boroughs,
+      category %in% input$selected_categories
+    )
+})
+
+# Reactive data loading for statistics
+stats_data <- reactive({
+  req(input$stats_months)
+
+  if (length(input$stats_months) == 0) {
+    return(data.frame())
+  }
+
+  load_multiple_months(input$stats_months)
+})
+
+# Filtered data for statistics
+filtered_stats_data <- reactive({
+  req(stats_data(), input$stats_boroughs, input$stats_categories)
+
+  stats_data() %>%
+    filter(
+      borough_name %in% input$stats_boroughs,
+      category %in% input$stats_categories
+    )
+})
+
+# Borough analysis data
+analysis_data <- eventReactive(
+  input$update_analysis,
+  {
+    req(
+      input$analysis_borough,
+      input$analysis_date_range,
+      input$analysis_categories
+    )
+
+    start_month <- format(input$analysis_date_range[1], "%Y-%m")
+    end_month <- format(input$analysis_date_range[2], "%Y-%m")
+
+    months_in_range <- available_months[
+      available_months >= start_month & available_months <= end_month
+    ]
+
+    if (length(months_in_range) == 0) {
+      return(data.frame())
+    }
+
+    data <- load_multiple_months(months_in_range)
+
+    data %>%
+      filter(
+        borough_name == input$analysis_borough,
+        category %in% input$analysis_categories
+      )
+  },
+  ignoreNULL = FALSE
+)
+
+# Explorer data
+explorer_data <- reactive({
+  req(input$explorer_months)
+
+  if (length(input$explorer_months) == 0) {
+    return(data.frame())
+  }
+
+  load_multiple_months(input$explorer_months)
+})
+
+# Map output
+output$crime_map <- renderLeaflet({
+  req(filtered_data(), input$crime_metric, input$map_level)
+
+  if (nrow(filtered_data()) == 0) {
+    return(
+      leaflet() %>%
+        addTiles() %>%
+        setView(lng = -0.1278, lat = 51.5074, zoom = 10)
+    )
+  }
+
+  if (input$map_level == "borough") {
+    # Borough level aggregation
+    borough_crimes <- filtered_data() %>%
+      st_drop_geometry() %>%
+      count(borough_name, name = "crime_count")
+
+    borough_map_data <- borough_boundaries %>%
+      left_join(borough_crimes, by = "borough_name") %>%
+      mutate(crime_count = replace_na(crime_count, 0))
+    
+    # Calculate crime rate if selected
+    if (input$crime_metric == "rate") {
+      # For now, use a simple population estimate (can be enhanced with real data)
+      # Average LSOA population ~1500, so borough population = lsoa_count * 1500
+      borough_map_data <- borough_map_data %>%
+        mutate(
+          estimated_population = lsoa_count * 1500,
+          display_value = round((crime_count / estimated_population) * 1000, 2)
+        )
+      
+      metric_title <- "Crime Rate (per 1000)"
+      popup_metric <- "Rate"
+      popup_unit <- " per 1000"
+    } else {
+      borough_map_data <- borough_map_data %>%
+        mutate(display_value = crime_count)
+      
+      metric_title <- "Crime Count"
+      popup_metric <- "Crimes"
+      popup_unit <- ""
+    }
+
+    pal <- colorNumeric("YlOrRd", domain = borough_map_data$display_value)
+
+    leaflet(borough_map_data) %>%
+      addTiles() %>%
+      addPolygons(
+        fillColor = ~ pal(display_value),
+        fillOpacity = 0.7,
+        color = "white",
+        weight = 2,
+        popup = ~ paste(
+          "<strong>", borough_name, "</strong><br/>",
+          popup_metric, ": ", comma(ifelse(input$crime_metric == "rate", display_value, crime_count)), popup_unit, "<br/>",
+          "LSOAs: ", lsoa_count
+        ),
+        highlightOptions = highlightOptions(
+          weight = 3,
+          color = "#666",
+          fillOpacity = 0.9,
+          bringToFront = TRUE
+        )
+      ) %>%
+      addLegend(
+        pal = pal,
+        values = ~display_value,
+        title = metric_title,
+        position = "bottomright"
+      )
+  } else {
+    # LSOA level choropleth
+    lsoa_crimes <- filtered_data() %>%
+      st_drop_geometry() %>%
+      count(lsoa_code, name = "crime_count")
+
+    lsoa_map_data <- london_boundaries %>%
+      left_join(lsoa_crimes, by = "lsoa_code") %>%
+      mutate(crime_count = replace_na(crime_count, 0))
+    
+    # Calculate crime rate if selected
+    if (input$crime_metric == "rate") {
+      # Use estimated LSOA population of 1500
+      lsoa_map_data <- lsoa_map_data %>%
+        mutate(
+          estimated_population = 1500,
+          display_value = round((crime_count / estimated_population) * 1000, 2)
+        )
+      
+      metric_title <- "Crime Rate (per 1000)"
+      popup_metric <- "Rate"
+      popup_unit <- " per 1000"
+    } else {
+      lsoa_map_data <- lsoa_map_data %>%
+        mutate(display_value = crime_count)
+      
+      metric_title <- "Crime Count"
+      popup_metric <- "Crimes"
+      popup_unit <- ""
+    }
+    
+    # Filter out LSOAs with 0 crimes for better visualization
+    lsoa_map_data_filtered <- lsoa_map_data %>%
+      filter(display_value > 0)
+
+    if (nrow(lsoa_map_data_filtered) == 0) {
+      return(
+        leaflet() %>%
+          addTiles() %>%
+          setView(lng = -0.1278, lat = 51.5074, zoom = 10) %>%
+          addControl("No crimes found for selected filters", position = "topright")
+      )
+    }
+
+    pal <- colorNumeric("YlOrRd", domain = lsoa_map_data_filtered$display_value)
+
+    leaflet(lsoa_map_data_filtered) %>%
+      addTiles() %>%
+      addPolygons(
+        fillColor = ~ pal(display_value),
+        fillOpacity = 0.6,
+        color = "white",
+        weight = 0.5,
+        popup = ~ paste(
+          "<strong>", lsoa_name, "</strong><br/>",
+          "Borough: ", borough_name, "<br/>",
+          popup_metric, ": ", comma(ifelse(input$crime_metric == "rate", display_value, crime_count)), popup_unit
+        ),
+        highlightOptions = highlightOptions(
+          weight = 2,
+          color = "#666",
+          fillOpacity = 0.8,
+          bringToFront = TRUE
+        )
+      ) %>%
+      addLegend(
+        pal = pal,
+        values = ~display_value,
+        title = metric_title,
+        position = "bottomright"
+      )
+  }
+})
+
+# Map summary
+output$map_summary <- renderText({
+  req(filtered_data())
+
+  total_crimes <- nrow(filtered_data())
+  unique_boroughs <- n_distinct(filtered_data()$borough_name)
+  unique_categories <- n_distinct(filtered_data()$category)
+
+  paste(
+    "Total Crimes:",
+    comma(total_crimes),
+    "\n",
+    "Boroughs:",
+    unique_boroughs,
+    "\n",
+    "Crime Types:",
+    unique_categories
+  )
+})
+
+# Crime statistics table
+output$crime_stats <- renderTable({
+  req(filtered_stats_data())
+
+  filtered_stats_data() %>%
+    st_drop_geometry() %>%
+    group_by(category) %>%
+    summarise(
+      Count = n(),
+      `% of Total` = round(n() / nrow(filtered_stats_data()) * 100, 1),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(Count)) %>%
+    head(10)
+})
+
+# Top crimes chart
+output$top_crimes_chart <- renderPlotly({
+  req(filtered_stats_data())
+
+  top_crimes <- filtered_stats_data() %>%
+    st_drop_geometry() %>%
+    count(category, sort = TRUE) %>%
+    head(8)
+
+  p <- ggplot(top_crimes, aes(x = reorder(category, n), y = n)) +
+    geom_col(fill = "steelblue") +
+    coord_flip() +
+    labs(x = "", y = "Number of Crimes") +
+    theme_minimal() +
+    theme(axis.text.y = element_text(size = 8))
+
+  ggplotly(p, tooltip = c("y"))
+})
+
+# Borough trends
+output$borough_trends <- renderPlotly({
+  req(analysis_data())
+
+  if (nrow(analysis_data()) == 0) {
+    return(plotly_empty())
+  }
+
+  trends <- analysis_data() %>%
+    st_drop_geometry() %>%
+    group_by(month, category) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    mutate(date = ym(month))
+
+  p <- ggplot(trends, aes(x = date, y = count, color = category)) +
+    geom_line() +
+    geom_point() +
+    scale_x_date(date_labels = "%Y-%m", date_breaks = "2 months") +
+    labs(x = "Month", y = "Crime Count", color = "Crime Type") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+  ggplotly(p)
+})
+
+# Borough comparison table
+output$borough_comparison <- DT::renderDataTable({
+  req(crime_data(), input$analysis_categories)
+
+  comparison_data <- crime_data() %>%
+    st_drop_geometry() %>%
+    filter(category %in% input$analysis_categories) %>%
+    group_by(borough_name, category) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    pivot_wider(names_from = category, values_from = count, values_fill = 0) %>%
+    mutate(Total = rowSums(select(., -borough_name))) %>%
+    arrange(desc(Total))
+
+  DT::datatable(
+    comparison_data,
+    options = list(pageLength = 15, scrollX = TRUE),
+    rownames = FALSE
+  ) %>%
+    formatStyle("Total", fontWeight = "bold")
+})
+
+# Trends chart
+output$trends_chart <- renderPlotly({
+  req(
+    crime_data(),
+    input$trend_boroughs,
+    input$trend_aggregation,
+    input$trend_category
+  )
+
+  data_for_trends <- crime_data() %>%
+    st_drop_geometry() %>%
+    filter(borough_name %in% input$trend_boroughs)
+
+  if (input$trend_category != "all") {
+    data_for_trends <- data_for_trends %>%
+      filter(category == input$trend_category)
+  }
+
+  if (input$trend_aggregation == "month") {
+    trends <- data_for_trends %>%
+      group_by(borough_name, month) %>%
+      summarise(count = n(), .groups = "drop") %>%
+      mutate(date = ym(month))
+  } else if (input$trend_aggregation == "quarter") {
+    trends <- data_for_trends %>%
+      group_by(borough_name, year, quarter) %>%
+      summarise(count = n(), .groups = "drop") %>%
+      mutate(
+        date = as.Date(paste(year, (quarter - 1) * 3 + 1, "01", sep = "-"))
+      )
+  } else {
+    trends <- data_for_trends %>%
+      group_by(borough_name, year) %>%
+      summarise(count = n(), .groups = "drop") %>%
+      mutate(date = as.Date(paste(year, "01", "01", sep = "-")))
+  }
+
+  p <- ggplot(trends, aes(x = date, y = count, color = borough_name)) +
+    geom_line(size = 1) +
+    geom_point() +
+    scale_x_date(date_labels = "%Y-%m") +
+    labs(x = "Time", y = "Crime Count", color = "Borough") +
+    theme_minimal()
+
+  ggplotly(p)
+})
+
+# Seasonal chart
+output$seasonal_chart <- renderPlotly({
+  req(crime_data())
+
+  seasonal_data <- crime_data() %>%
+    st_drop_geometry() %>%
+    group_by(month_num) %>%
+    summarise(avg_crimes = n() / n_distinct(year), .groups = "drop") %>%
+    mutate(month_name = month.abb[month_num])
+
+  p <- ggplot(
+    seasonal_data,
+    aes(x = reorder(month_name, month_num), y = avg_crimes)
+  ) +
+    geom_col(fill = "darkblue") +
+    labs(x = "Month", y = "Average Monthly Crimes") +
+    theme_minimal()
+
+  ggplotly(p)
+})
+
+# Crime data table
+output$crime_table <- DT::renderDataTable({
+  req(explorer_data())
+
+  table_data <- explorer_data() %>%
+    st_drop_geometry() %>%
+    select(
+      Date = month,
+      Borough = borough_name,
+      `Crime Type` = category,
+      `Location Type` = location_type,
+      LSOA = lsoa_name,
+      Outcome = outcome_category,
+      Latitude = latitude,
+      Longitude = longitude
+    ) %>%
+    arrange(desc(Date))
+
+  DT::datatable(
+    table_data,
+    options = list(
+      pageLength = 20,
+      scrollX = TRUE,
+      search = list(search = "", smart = TRUE)
+    ),
+    filter = "top",
+    rownames = FALSE
+  )
+})
+
+# Data info
+output$data_info <- renderText({
+  req(explorer_data())
+
+  paste(
+    "Records:",
+    comma(nrow(explorer_data())),
+    "\n",
+    "Months:",
+    length(input$explorer_months),
+    "\n",
+    "Size:",
+    format(object.size(explorer_data()), units = "MB")
+  )
+})
+
+# Download handler
+output$download_data <- downloadHandler(
+  filename = function() {
+    paste("london_crime_data_", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    data_to_download <- filtered_data() %>%
+      st_drop_geometry()
+
+    write.csv(data_to_download, file, row.names = FALSE)
+  }
+)
+```

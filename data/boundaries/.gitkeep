@@ -1,0 +1,2 @@
+# This file keeps the data/boundaries directory in git
+# Boundary shapefiles will be downloaded when spatial_setup.R runs

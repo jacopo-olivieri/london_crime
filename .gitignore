@@ -1,0 +1,51 @@
+# R specific files
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rprofile
+
+# Quarto
+/.quarto/
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large data files - exclude processed data but keep structure
+data/processed/*.parquet
+data/boundaries/
+!data/processed/.gitkeep
+!data/boundaries/.gitkeep
+
+# Generated output files
+*.html
+*_files/
+WORKFLOW.html
+london_crime.html
+
+# Logs - exclude detailed logs but keep structure
+logs/*.log
+!logs/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Package development
+*.tar.gz
+*.zip
+
+# IDE files
+.vscode/
+*.sublime-*
+
+# renv - include lock file but exclude library
+renv/library/
+renv/staging/
