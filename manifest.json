@@ -1,6 +1,7 @@
 {
   "version": 1,
   "locale": "en_GB.UTF-8",
+  "platform": "4.5.0-linux-ubuntu-24.04",
   "metadata": {
     "appmode": "shiny",
     "entrypoint": "app.R"

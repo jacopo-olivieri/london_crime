@@ -46,6 +46,5 @@ logs/*.log
 .vscode/
 *.sublime-*
 
-# renv - include lock file but exclude library
-renv/library/
-renv/staging/
+# renv - exclude from Connect Cloud deployment
+renv/
