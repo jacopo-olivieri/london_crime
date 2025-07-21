@@ -17,11 +17,15 @@
 ehthumbs.db
 Thumbs.db
 
-# Large data files - exclude processed data but keep structure
-data/processed/*.parquet
-data/boundaries/
+# Large data files - exclude LSOA boundaries but include processed data and borough boundaries
+data/boundaries/lsoa/
+data/boundaries/LB_LSOA2021_shp.zip
 !data/processed/.gitkeep
 !data/boundaries/.gitkeep
+
+# Include processed crime data and borough boundaries for deployment
+!data/processed/crime_data_*.parquet
+!data/borough_boundaries_deployment.rds
 
 # Generated output files
 *.html

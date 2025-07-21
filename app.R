@@ -1,5 +1,5 @@
-# London Crime Data Dashboard - Cloud Version
-# Simplified for Posit Connect Cloud deployment
+# London Crime Data Dashboard - Production Version
+# Uses real crime data from 2023-01 to 2025-06
 
 # Load required libraries
 library(shiny)
@@ -16,113 +16,73 @@ library(glue)
 library(scales)
 library(purrr)
 library(stringr)
+library(arrow)
 
-# Create sample data for demo purposes
-create_sample_data <- function() {
-  # Create sample London crime data for demonstration
-  set.seed(123)
+# Load data functions
+load_multiple_months <- function(months_to_load) {
+  if (length(months_to_load) == 0) {
+    return(data.frame())
+  }
   
-  # London boroughs (simplified list)
-  boroughs <- c(
-    "Westminster", "Camden", "Islington", "Hackney", "Tower Hamlets",
-    "Greenwich", "Lewisham", "Southwark", "Lambeth", "Wandsworth",
-    "Merton", "Kingston upon Thames", "Richmond upon Thames", 
-    "Hounslow", "Hillingdon", "Ealing", "Brent", "Barnet"
-  )
+  # Try to load each month's data
+  all_data <- list()
   
-  # Crime categories
-  categories <- c(
-    "anti-social-behaviour", "burglary", "robbery", "theft-from-the-person",
-    "vehicle-crime", "violence-and-sexual-offences", "criminal-damage-arson",
-    "drugs", "other-theft", "public-order", "shoplifting"
-  )
+  for (month in months_to_load) {
+    file_path <- paste0("data/processed/crime_data_", month, ".parquet")
+    if (file.exists(file_path)) {
+      monthly_data <- read_parquet(file_path)
+      all_data[[month]] <- monthly_data
+    }
+  }
   
-  # Generate sample data for last 6 months
-  months <- seq(from = as.Date("2024-01-01"), to = as.Date("2024-06-01"), by = "month")
-  month_strings <- format(months, "%Y-%m")
+  if (length(all_data) == 0) {
+    return(data.frame())
+  }
   
-  # Create sample crime data
-  sample_crimes <- map_dfr(month_strings, function(month) {
-    n_crimes <- sample(800:1200, 1)  # Random crimes per month
-    
-    tibble(
-      crime_id = paste0("crime_", seq_len(n_crimes)),
-      category = sample(categories, n_crimes, replace = TRUE),
-      month = month,
-      date = as.Date(paste0(month, "-15")),  # Mid-month date
-      year = as.numeric(substr(month, 1, 4)),
-      month_num = as.numeric(substr(month, 6, 7)),
-      quarter = ceiling(as.numeric(substr(month, 6, 7)) / 3),
-      borough_name = sample(boroughs, n_crimes, replace = TRUE),
-      latitude = runif(n_crimes, 51.28, 51.69),  # London lat range
-      longitude = runif(n_crimes, -0.51, 0.33),  # London lng range
-      location_type = sample(c("Force", "BTP"), n_crimes, replace = TRUE, prob = c(0.95, 0.05)),
-      outcome_category = sample(
-        c("investigation-complete", "under-investigation", "unable-to-prosecute", 
-          "offender-cautioned", "local-resolution"),
-        n_crimes, replace = TRUE,
-        prob = c(0.4, 0.25, 0.15, 0.1, 0.1)
-      ),
-      lsoa_name = paste(borough_name, sample(1:20, n_crimes, replace = TRUE), "LSOA"),
-      lsoa_code = paste0("E0", sample(1000:9999, n_crimes, replace = TRUE))
-    )
-  })
+  # Combine all months
+  combined_data <- bind_rows(all_data)
   
-  # Convert to sf object
-  sample_crimes_sf <- sample_crimes %>%
-    st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
-  
-  return(sample_crimes_sf)
+  return(combined_data)
 }
 
-# Create borough boundaries (simplified)
-create_sample_boundaries <- function() {
-  boroughs <- c(
-    "Westminster", "Camden", "Islington", "Hackney", "Tower Hamlets",
-    "Greenwich", "Lewisham", "Southwark", "Lambeth", "Wandsworth",
-    "Merton", "Kingston upon Thames", "Richmond upon Thames", 
-    "Hounslow", "Hillingdon", "Ealing", "Brent", "Barnet"
-  )
-  
-  # Create simple rectangular boundaries for each borough
-  set.seed(456)
-  boundaries <- map_dfr(boroughs, function(borough) {
-    center_lat <- runif(1, 51.35, 51.65)
-    center_lng <- runif(1, -0.4, 0.2)
-    
-    # Create a simple square boundary
-    coords <- matrix(c(
-      center_lng - 0.05, center_lat - 0.03,
-      center_lng + 0.05, center_lat - 0.03,
-      center_lng + 0.05, center_lat + 0.03,
-      center_lng - 0.05, center_lat + 0.03,
-      center_lng - 0.05, center_lat - 0.03
-    ), ncol = 2, byrow = TRUE)
-    
-    polygon <- st_polygon(list(coords))
-    
-    tibble(
-      borough_name = borough,
-      lsoa_count = sample(80:150, 1)
-    ) %>%
-      st_as_sf(geometry = st_sfc(polygon, crs = 4326))
-  })
-  
-  return(boundaries)
+# Initialize data - all available months from 2023-01 to 2025-06
+available_months <- c(
+  paste0("2023-", sprintf("%02d", 1:12)),
+  paste0("2024-", sprintf("%02d", 1:12)),
+  paste0("2025-", sprintf("%02d", 1:6))
+)
+
+# Filter to only months that actually exist
+existing_months <- c()
+for (month in available_months) {
+  if (file.exists(paste0("data/processed/crime_data_", month, ".parquet"))) {
+    existing_months <- c(existing_months, month)
+  }
+}
+available_months <- existing_months
+
+# Load borough boundaries
+if (file.exists("data/borough_boundaries_deployment.rds")) {
+  borough_boundaries <- readRDS("data/borough_boundaries_deployment.rds")
+} else {
+  stop("Borough boundaries file not found. Please ensure data/borough_boundaries_deployment.rds exists.")
 }
 
-# Initialize data
-crime_data_sample <- create_sample_data()
-borough_boundaries <- create_sample_boundaries()
+# Extract metadata from a sample to get categories and boroughs
+if (length(available_months) > 0) {
+  sample_data <- load_multiple_months(available_months[length(available_months)])
+  crime_categories <- sort(unique(sample_data$category))
+  borough_names <- sort(unique(sample_data$borough_name))
+} else {
+  stop("No crime data files found. Please ensure data/processed/ contains parquet files.")
+}
 
-# Extract metadata
-available_months <- sort(unique(crime_data_sample$month))
-crime_categories <- sort(unique(crime_data_sample$category))
-borough_names <- sort(unique(crime_data_sample$borough_name))
+# Default date range (last 12 months or all available)
+default_months <- if(length(available_months) > 12) tail(available_months, 12) else available_months
 
 # UI
 ui <- dashboardPage(
-  dashboardHeader(title = "London Crime Dashboard (Demo)"),
+  dashboardHeader(title = "London Crime Dashboard"),
   
   dashboardSidebar(
     sidebarMenu(
@@ -153,14 +113,14 @@ ui <- dashboardPage(
               "selected_months",
               "Select Months:",
               choices = setNames(available_months, paste(month.abb[as.numeric(str_sub(available_months, 6, 7))], str_sub(available_months, 1, 4))),
-              selected = tail(available_months, 3),
+              selected = tail(available_months, 6),
               multiple = TRUE
             ),
             selectInput(
               "selected_boroughs",
               "Boroughs:",
               choices = borough_names,
-              selected = borough_names[1:10],
+              selected = borough_names,
               multiple = TRUE
             ),
             selectInput(
@@ -170,12 +130,21 @@ ui <- dashboardPage(
               selected = crime_categories[1:5],
               multiple = TRUE
             ),
+            radioButtons(
+              "crime_metric",
+              "Display Metric:",
+              choices = list(
+                "Crime Count" = "count",
+                "Crime Rate (per 1000)" = "rate"
+              ),
+              selected = "count"
+            ),
             hr(),
             h5("Map Summary"),
             verbatimTextOutput("map_summary")
           ),
           box(
-            title = "Interactive Crime Map", status = "primary", solidHeader = TRUE, width = 9,
+            title = "London Crime Distribution", status = "primary", solidHeader = TRUE, width = 9,
             leafletOutput("crime_map", height = "600px")
           )
         )
@@ -191,7 +160,7 @@ ui <- dashboardPage(
               "stats_months",
               "Select Months:",
               choices = setNames(available_months, paste(month.abb[as.numeric(str_sub(available_months, 6, 7))], str_sub(available_months, 1, 4))),
-              selected = tail(available_months, 3),
+              selected = tail(available_months, 6),
               multiple = TRUE
             ),
             selectInput(
@@ -231,10 +200,20 @@ ui <- dashboardPage(
               "Focus Crime Type:",
               choices = c("All Crimes" = "all", crime_categories),
               selected = "all"
+            ),
+            radioButtons(
+              "trend_aggregation",
+              "Time Period:",
+              choices = list(
+                "Monthly" = "month",
+                "Quarterly" = "quarter",
+                "Yearly" = "year"
+              ),
+              selected = "month"
             )
           ),
           box(
-            title = "Monthly Crime Trends", status = "primary", solidHeader = TRUE, width = 9,
+            title = "Crime Trends Over Time", status = "primary", solidHeader = TRUE, width = 9,
             plotlyOutput("trends_chart", height = "500px")
           )
         )
@@ -250,7 +229,7 @@ ui <- dashboardPage(
               "explorer_months",
               "Select Months:",
               choices = available_months,
-              selected = tail(available_months, 2),
+              selected = tail(available_months, 3),
               multiple = TRUE
             ),
             downloadButton(
@@ -280,9 +259,14 @@ server <- function(input, output, session) {
   map_data <- reactive({
     req(input$selected_months, input$selected_boroughs, input$selected_categories)
     
-    crime_data_sample %>%
+    data <- load_multiple_months(input$selected_months)
+    
+    if (nrow(data) == 0) {
+      return(data.frame())
+    }
+    
+    data %>%
       filter(
-        month %in% input$selected_months,
         borough_name %in% input$selected_boroughs,
         category %in% input$selected_categories
       )
@@ -292,19 +276,42 @@ server <- function(input, output, session) {
   stats_data <- reactive({
     req(input$stats_months, input$stats_categories)
     
-    crime_data_sample %>%
-      filter(
-        month %in% input$stats_months,
-        category %in% input$stats_categories
-      )
+    data <- load_multiple_months(input$stats_months)
+    
+    if (nrow(data) == 0) {
+      return(data.frame())
+    }
+    
+    data %>%
+      filter(category %in% input$stats_categories)
   })
   
   # Reactive data for explorer
   explorer_data <- reactive({
     req(input$explorer_months)
+    load_multiple_months(input$explorer_months)
+  })
+  
+  # Reactive data for trends
+  trend_data <- reactive({
+    req(input$trend_boroughs)
     
-    crime_data_sample %>%
-      filter(month %in% input$explorer_months)
+    # Load all data for trend analysis
+    data <- load_multiple_months(available_months)
+    
+    if (nrow(data) == 0) {
+      return(data.frame())
+    }
+    
+    filtered_data <- data %>%
+      filter(borough_name %in% input$trend_boroughs)
+    
+    if (input$trend_category != "all") {
+      filtered_data <- filtered_data %>%
+        filter(category == input$trend_category)
+    }
+    
+    return(filtered_data)
   })
   
   # Crime map
@@ -315,7 +322,8 @@ server <- function(input, output, session) {
       return(
         leaflet() %>%
           addTiles() %>%
-          setView(lng = -0.1278, lat = 51.5074, zoom = 10)
+          setView(lng = -0.1278, lat = 51.5074, zoom = 10) %>%
+          addControl("No crimes found for selected filters", position = "topright")
       )
     }
     
@@ -328,18 +336,49 @@ server <- function(input, output, session) {
       left_join(borough_crimes, by = "borough_name") %>%
       mutate(crime_count = replace_na(crime_count, 0))
     
-    pal <- colorNumeric("YlOrRd", domain = borough_map_data$crime_count)
+    # Calculate crime rate if selected
+    if (input$crime_metric == "rate") {
+      # Use estimated population: LSOA count * 1500
+      borough_map_data <- borough_map_data %>%
+        mutate(
+          estimated_population = lsoa_count * 1500,
+          display_value = round((crime_count / estimated_population) * 1000, 2)
+        )
+      
+      metric_title <- "Crime Rate (per 1000)"
+      popup_metric <- "Rate"
+      popup_unit <- " per 1000"
+    } else {
+      borough_map_data <- borough_map_data %>%
+        mutate(display_value = crime_count)
+      
+      metric_title <- "Crime Count"
+      popup_metric <- "Crimes"
+      popup_unit <- ""
+    }
+    
+    # Filter out boroughs with 0 crimes for better color scale
+    if (max(borough_map_data$display_value) == 0) {
+      return(
+        leaflet() %>%
+          addTiles() %>%
+          setView(lng = -0.1278, lat = 51.5074, zoom = 10) %>%
+          addControl("No crimes found for selected filters", position = "topright")
+      )
+    }
+    
+    pal <- colorNumeric("YlOrRd", domain = borough_map_data$display_value)
     
     leaflet(borough_map_data) %>%
       addTiles() %>%
       addPolygons(
-        fillColor = ~ pal(crime_count),
+        fillColor = ~ pal(display_value),
         fillOpacity = 0.7,
         color = "white",
         weight = 2,
         popup = ~ paste(
           "<strong>", borough_name, "</strong><br/>",
-          "Crimes: ", comma(crime_count), "<br/>",
+          popup_metric, ": ", comma(ifelse(input$crime_metric == "rate", display_value, crime_count)), popup_unit, "<br/>",
           "LSOAs: ", lsoa_count
         ),
         highlightOptions = highlightOptions(
@@ -351,23 +390,28 @@ server <- function(input, output, session) {
       ) %>%
       addLegend(
         pal = pal,
-        values = ~crime_count,
-        title = "Crime Count",
+        values = ~display_value,
+        title = metric_title,
         position = "bottomright"
-      )
+      ) %>%
+      setView(lng = -0.1278, lat = 51.5074, zoom = 10)
   })
   
   # Map summary
   output$map_summary <- renderText({
     req(map_data())
     
+    total_crimes <- nrow(map_data())
+    unique_boroughs <- n_distinct(map_data()$borough_name)
+    unique_categories <- n_distinct(map_data()$category)
+    
     paste(
       "Total Crimes:",
-      comma(nrow(map_data())),
+      comma(total_crimes),
       "\nBoroughs:",
-      n_distinct(map_data()$borough_name),
+      unique_boroughs,
       "\nCrime Types:",
-      n_distinct(map_data()$category)
+      unique_categories
     )
   })
   
@@ -384,7 +428,7 @@ server <- function(input, output, session) {
         .groups = "drop"
       ) %>%
       arrange(desc(Count)) %>%
-      head(10)
+      head(15)
   })
   
   # Top crimes chart
@@ -394,7 +438,7 @@ server <- function(input, output, session) {
     top_crimes <- stats_data() %>%
       st_drop_geometry() %>%
       count(category, sort = TRUE) %>%
-      head(8)
+      head(10)
     
     p <- ggplot(top_crimes, aes(x = reorder(category, n), y = n)) +
       geom_col(fill = "steelblue") +
@@ -408,28 +452,39 @@ server <- function(input, output, session) {
   
   # Trends chart
   output$trends_chart <- renderPlotly({
-    req(input$trend_boroughs)
+    req(trend_data())
     
-    data_for_trends <- crime_data_sample %>%
-      st_drop_geometry() %>%
-      filter(borough_name %in% input$trend_boroughs)
-    
-    if (input$trend_category != "all") {
-      data_for_trends <- data_for_trends %>%
-        filter(category == input$trend_category)
+    if (nrow(trend_data()) == 0) {
+      return(plotly_empty())
     }
     
-    trends <- data_for_trends %>%
-      group_by(borough_name, month) %>%
-      summarise(count = n(), .groups = "drop") %>%
-      mutate(date = ym(month))
+    if (input$trend_aggregation == "month") {
+      trends <- trend_data() %>%
+        st_drop_geometry() %>%
+        group_by(borough_name, month) %>%
+        summarise(count = n(), .groups = "drop") %>%
+        mutate(date = ym(month))
+    } else if (input$trend_aggregation == "quarter") {
+      trends <- trend_data() %>%
+        st_drop_geometry() %>%
+        group_by(borough_name, year, quarter) %>%
+        summarise(count = n(), .groups = "drop") %>%
+        mutate(date = as.Date(paste(year, (quarter - 1) * 3 + 1, "01", sep = "-")))
+    } else {
+      trends <- trend_data() %>%
+        st_drop_geometry() %>%
+        group_by(borough_name, year) %>%
+        summarise(count = n(), .groups = "drop") %>%
+        mutate(date = as.Date(paste(year, "01", "01", sep = "-")))
+    }
     
     p <- ggplot(trends, aes(x = date, y = count, color = borough_name)) +
       geom_line(size = 1) +
       geom_point() +
       scale_x_date(date_labels = "%Y-%m") +
-      labs(x = "Month", y = "Crime Count", color = "Borough") +
-      theme_minimal()
+      labs(x = "Time", y = "Crime Count", color = "Borough") +
+      theme_minimal() +
+      theme(legend.position = "bottom")
     
     ggplotly(p)
   })
@@ -445,16 +500,18 @@ server <- function(input, output, session) {
         Borough = borough_name,
         `Crime Type` = category,
         `Location Type` = location_type,
-        LSOA = lsoa_name,
-        Outcome = outcome_category
+        Outcome = outcome_category,
+        Year = year,
+        Quarter = quarter
       ) %>%
       arrange(desc(Month))
     
     DT::datatable(
       table_data,
       options = list(
-        pageLength = 20,
-        scrollX = TRUE
+        pageLength = 25,
+        scrollX = TRUE,
+        search = list(search = "", smart = TRUE)
       ),
       filter = "top",
       rownames = FALSE
@@ -470,6 +527,8 @@ server <- function(input, output, session) {
       comma(nrow(explorer_data())),
       "\nMonths:",
       length(input$explorer_months),
+      "\nDate Range:", 
+      min(explorer_data()$month), "to", max(explorer_data()$month),
       "\nSize:",
       format(object.size(explorer_data()), units = "MB")
     )
@@ -478,10 +537,10 @@ server <- function(input, output, session) {
   # Download handler
   output$download_data <- downloadHandler(
     filename = function() {
-      paste("london_crime_sample_", Sys.Date(), ".csv", sep = "")
+      paste("london_crime_data_", paste(input$explorer_months, collapse = "_"), "_", Sys.Date(), ".csv", sep = "")
     },
     content = function(file) {
-      data_to_download <- map_data() %>%
+      data_to_download <- explorer_data() %>%
         st_drop_geometry()
       
       write.csv(data_to_download, file, row.names = FALSE)
