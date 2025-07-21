@@ -21,7 +21,7 @@ A robust R data pipeline for fetching, processing, and caching crime data for Gr
 
 1. Clone and navigate to the project:
 ```bash
-git clone https://github.com/your-username/london_crime.git
+git clone https://github.com/jacopo-olivieri/london_crime.git
 cd london_crime
 ```
 
