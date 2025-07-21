@@ -17,6 +17,7 @@ library(scales)
 library(purrr)
 library(stringr)
 library(arrow)
+library(here)
 
 # Load data functions
 load_multiple_months <- function(months_to_load) {
