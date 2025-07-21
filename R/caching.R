@@ -2,7 +2,10 @@ library(arrow)
 library(sf)
 library(here)
 library(glue)
-library(tidyverse)
+library(dplyr)
+library(purrr)
+library(tibble)
+library(stringr)
 library(lubridate)
 
 monthly_cache_exists <- function(year_month) {
