@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "locale": "en_GB",
+  "locale": "en_US",
   "platform": "4.5.0",
   "metadata": {
     "appmode": "shiny",
@@ -1239,6 +1239,42 @@
         "RemoteSha": "0.3.6"
       }
     },
+    "here": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "here",
+        "Title": "A Simpler Way to Find Your Files",
+        "Version": "1.0.1",
+        "Date": "2020-12-13",
+        "Authors@R": "\n    c(person(given = \"Kirill\",\n             family = \"M\\u00fcller\",\n             role = c(\"aut\", \"cre\"),\n             email = \"krlmlr+r@mailbox.org\",\n             comment = c(ORCID = \"0000-0002-1416-3412\")),\n      person(given = \"Jennifer\",\n             family = \"Bryan\",\n             role = \"ctb\",\n             email = \"jenny@rstudio.com\",\n             comment = c(ORCID = \"0000-0002-6983-2759\")))",
+        "Description": "Constructs paths to your project's files.\n    Declare the relative path of a file within your project with 'i_am()'.\n    Use the 'here()' function as a drop-in replacement for 'file.path()',\n    it will always locate the files relative to your project root.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://here.r-lib.org/, https://github.com/r-lib/here",
+        "BugReports": "https://github.com/r-lib/here/issues",
+        "Imports": "rprojroot (>= 2.0.2)",
+        "Suggests": "conflicted, covr, fs, knitr, palmerpenguins, plyr, readr,\nrlang, rmarkdown, testthat, uuid, withr",
+        "VignetteBuilder": "knitr",
+        "Encoding": "UTF-8",
+        "LazyData": "true",
+        "RoxygenNote": "7.1.1.9000",
+        "Config/testthat/edition": "3",
+        "NeedsCompilation": "no",
+        "Packaged": "2020-12-13 06:59:33 UTC; kirill",
+        "Author": "Kirill Müller [aut, cre] (<https://orcid.org/0000-0002-1416-3412>),\n  Jennifer Bryan [ctb] (<https://orcid.org/0000-0002-6983-2759>)",
+        "Maintainer": "Kirill Müller <krlmlr+r@mailbox.org>",
+        "Repository": "CRAN",
+        "Date/Publication": "2020-12-13 07:30:02 UTC",
+        "Built": "R 4.5.0; ; 2025-03-31 22:01:36 UTC; unix",
+        "RemoteType": "standard",
+        "RemoteRef": "here",
+        "RemotePkgRef": "here",
+        "RemoteRepos": "https://cloud.r-project.org",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "aarch64-apple-darwin20",
+        "RemoteSha": "1.0.1"
+      }
+    },
     "highr": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -2428,6 +2464,43 @@
         "RemoteSha": "2.29"
       }
     },
+    "rprojroot": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "rprojroot",
+        "Title": "Finding Files in Project Subdirectories",
+        "Version": "2.1.0",
+        "Authors@R": "\n    person(given = \"Kirill\",\n           family = \"M\\u00fcller\",\n           role = c(\"aut\", \"cre\"),\n           email = \"kirill@cynkra.com\",\n           comment = c(ORCID = \"0000-0002-1416-3412\"))",
+        "Description": "Robust, reliable and flexible paths to files below\n    a project root. The 'root' of a project is defined as a directory that\n    matches a certain criterion, e.g., it contains a certain regular file.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://rprojroot.r-lib.org/, https://github.com/r-lib/rprojroot",
+        "BugReports": "https://github.com/r-lib/rprojroot/issues",
+        "Depends": "R (>= 3.0.0)",
+        "Suggests": "covr, knitr, lifecycle, rlang, rmarkdown, testthat (>=\n3.2.0), withr",
+        "VignetteBuilder": "knitr",
+        "Config/testthat/edition": "3",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.3.2.9000",
+        "Config/autostyle/scope": "line_breaks",
+        "Config/autostyle/strict": "true",
+        "Config/Needs/website": "tidyverse/tidytemplate",
+        "NeedsCompilation": "no",
+        "Packaged": "2025-07-12 07:59:07 UTC; kirill",
+        "Author": "Kirill Müller [aut, cre] (ORCID:\n    <https://orcid.org/0000-0002-1416-3412>)",
+        "Maintainer": "Kirill Müller <kirill@cynkra.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2025-07-12 09:00:02 UTC",
+        "Built": "R 4.5.0; ; 2025-07-14 23:30:23 UTC; unix",
+        "RemoteType": "standard",
+        "RemoteRef": "rprojroot",
+        "RemotePkgRef": "rprojroot",
+        "RemoteRepos": "https://cloud.r-project.org",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "aarch64-apple-darwin20",
+        "RemoteSha": "2.1.0"
+      }
+    },
     "s2": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -3367,7 +3440,7 @@
   },
   "files": {
     "app.R": {
-      "checksum": "23a4a553faefaa0044909fe1b68b002a"
+      "checksum": "16a3313ddde011c8e6567e0ddd4e6733"
     },
     "data/.DS_Store": {
       "checksum": "f4c7ec27a52e661e525234b6a1229708"
